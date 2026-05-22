@@ -69,6 +69,20 @@ Run the built-in demo (single bracket + 10-sim probability table):
 venv/bin/python tournament_simulator.py
 ```
 
+### `generate_results.py` — static results webpage
+
+Runs 1 000 Monte Carlo simulations and writes a self-contained `index.html`
+with the win-probability table embedded as inline JSON (no server required).
+
+```bash
+venv/bin/python generate_results.py
+open index.html          # or double-click in Finder / Explorer
+```
+
+The page shows all 48 teams ranked by win probability with sortable columns
+(Win %, Finalist %, Top 3 %) and a filter box. Placeholder teams (unresolved
+playoff slots) are shown in gray italic.
+
 ## Data files (`data/`)
 
 | File | Contents |
