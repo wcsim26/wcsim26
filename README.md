@@ -1,6 +1,6 @@
-# 2026 World Cup Match Simulator
+# 2026 World Cup Simulator
 
-Simulates FIFA 2026 World Cup match outcomes using the **Elo-Difference Poisson Model**.
+Simulates FIFA 2026 World Cup matches and full tournaments using the **Elo-Difference Poisson Model**.
 
 ## Model
 
@@ -15,11 +15,13 @@ Expected goals for each team are derived from the difference in Elo ratings:
 |---|---|---|
 | `α` (alpha) | 0.26 | ln(1.3) — baseline ~1.3 goals/team |
 | `β` (beta) | 0.003 | Elo scaling factor |
-| Home advantage | +100 Elo | Applied to host nations: USA, Mexico, Canada |
+| Home advantage | +100 Elo | Applied per city: USA teams in USA venues, Mexico in Mexico, Canada in Canada |
 
-Goals for each team are drawn independently from Poisson distributions with the computed λ values.
+Goals are drawn independently from Poisson distributions. Knockout draws are resolved by a 50/50 penalty coin-flip.
 
-## Usage
+## Modules
+
+### `wc26_simulation.py` — core model primitives
 
 ```python
 from wc26_simulation import calculate_expected_goals, get_match_probabilities, simulate_match_score
@@ -45,23 +47,65 @@ Run the built-in demo:
 venv/bin/python wc26_simulation.py
 ```
 
-## API
+### `tournament_simulator.py` — full tournament runner
+
+Loads real fixture data and PELE Elo ratings from `data/`, then simulates the complete 104-match tournament: Group Stage → Round of 32 → Round of 16 → Quarterfinals → Semifinals → Final.
+
+```python
+from tournament_simulator import simulate_tournament
+
+# Single run, reproducible
+results = simulate_tournament(n=1, seed=42)
+print(results[["champion_name", "finalist_code", "third_place_code"]])
+
+# Monte Carlo win probabilities
+results = simulate_tournament(n=1000, seed=0)
+print(results["champion_code"].value_counts(normalize=True).mul(100).round(1))
+```
+
+Run the built-in demo (single bracket + 10-sim probability table):
+
+```bash
+venv/bin/python tournament_simulator.py
+```
+
+## Data files (`data/`)
+
+| File | Contents |
+|---|---|
+| `teams.csv` | 48 qualified teams with FIFA codes and group assignments |
+| `matches.csv` | Full 104-match schedule with stage, city, and opponent labels |
+| `host_cities.csv` | 16 venues across USA, Mexico, and Canada |
+| `tournament_stages.csv` | Stage names (Group Stage through Final) |
+| `data-4oVop.csv` | PELE Elo ratings for ~200 nations, current and historical |
+
+## API — `wc26_simulation.py`
 
 ### `calculate_expected_goals(team_a_elo, team_b_elo, a_is_host, b_is_host) -> (λ_a, λ_b)`
 
-Returns expected goals for each team after applying any home advantage.
+Returns expected goals after applying any home advantage.
 
 ### `get_match_probabilities(lambda_a, lambda_b, max_goals=10) -> dict`
 
-Returns `{"win_a": float, "draw": float, "win_b": float}` by building a Poisson scoreline probability matrix and summing via `numpy.tril`, `numpy.trace`, and `numpy.triu` (no loops).
+Returns `{"win_a": float, "draw": float, "win_b": float}` via a vectorised Poisson scoreline matrix (`numpy.tril` / `numpy.trace` / `numpy.triu` — no loops).
 
 ### `simulate_match_score(lambda_a, lambda_b, rng=None) -> (goals_a, goals_b)`
 
-Draws a random scoreline. Pass `np.random.default_rng(seed)` for reproducible results.
+Draws a random scoreline. Pass `np.random.default_rng(seed)` for reproducibility.
 
-### `build_teams_dataframe() -> pd.DataFrame`
+## API — `tournament_simulator.py`
 
-Returns a sample DataFrame with columns `team`, `elo`, `is_host`.
+### `simulate_tournament(n, seed) -> pd.DataFrame`
+
+Runs `n` full simulations. Returns one row per run: `sim_id`, `champion_code`, `champion_name`, `finalist_code`, `third_place_code`.
+
+### `load_tournament_data() -> dict[str, pd.DataFrame]`
+
+Loads all CSVs from `data/`.
+
+### `build_elo_map(teams_df, elo_df) -> dict[int, float]`
+
+Maps team ID → current PELE Elo. Falls back to 1750 for unresolved playoff slots and 1650 for any qualifier absent from the ratings file.
 
 ## Requirements
 
@@ -70,8 +114,6 @@ numpy
 scipy
 pandas
 ```
-
-Install into the project venv:
 
 ```bash
 venv/bin/pip install numpy scipy pandas
