@@ -423,19 +423,25 @@ def simulate_knockout_stage(
 def simulate_tournament(
     n: int = 1,
     seed: int | None = None,
-) -> pd.DataFrame:
+    detailed: bool = False,
+) -> "pd.DataFrame | tuple[pd.DataFrame, list]":
     """
     Run n complete tournament simulations from Group Stage through Final.
 
     Parameters
     ----------
-    n    : Number of independent simulations to run.
-    seed : Optional RNG seed for reproducibility.
+    n        : Number of independent simulations to run.
+    seed     : Optional RNG seed for reproducibility.
+    detailed : When True, also return per-simulation knockout matchup data as a
+               second element: list[list[dict]] where each inner list contains
+               {stage_id, team_a_id, team_b_id} dicts for every knockout match
+               played (R32/R16/QF/SF/Final; third-place playoff excluded).
 
     Returns
     -------
-    DataFrame with columns:
-        sim_id, champion_code, champion_name, finalist_code, third_place_code.
+    DataFrame (detailed=False) or (DataFrame, matchups_list) (detailed=True).
+    DataFrame columns: sim_id, champion_code, champion_name, finalist_code,
+    third_place_code.
     """
     data = load_tournament_data()
     teams_df   = data["teams"]
@@ -448,8 +454,14 @@ def simulate_tournament(
     id_to_code: dict[int, str] = teams_df.set_index("id")["fifa_code"].to_dict()
     id_to_name: dict[int, str] = teams_df.set_index("id")["team_name"].to_dict()
 
+    if detailed:
+        stage_lookup: dict[int, int] = (
+            matches_df.set_index("match_number")["stage_id"].to_dict()
+        )
+
     rng = np.random.default_rng(seed)
-    records = []
+    records: list = []
+    all_matchups: list = []
 
     for sim_id in range(n):
         group_results    = simulate_group_stage(matches_df, elo_map, host_map, nation_map, rng)
@@ -472,7 +484,22 @@ def simulate_tournament(
             "third_place_code": id_to_code.get(third_id),
         })
 
-    return pd.DataFrame(records)
+        if detailed:
+            matchups = [
+                {
+                    "stage_id":   int(stage_lookup[mn]),
+                    "team_a_id":  int(winners[mn]),
+                    "team_b_id":  int(losers[mn]),
+                }
+                for mn in winners
+                if stage_lookup.get(mn) in (2, 3, 4, 5, 7)
+            ]
+            all_matchups.append(matchups)
+
+    df = pd.DataFrame(records)
+    if detailed:
+        return df, all_matchups
+    return df
 
 # ---------------------------------------------------------------------------
 # Main demonstration

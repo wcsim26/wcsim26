@@ -72,7 +72,8 @@ venv/bin/python tournament_simulator.py
 ### `run_simulations.py` — run and save simulation results
 
 Runs 1 000 Monte Carlo simulations and saves raw per-run results to
-`sim_results.json`. Run this once, or whenever you want fresh numbers.
+`sim_results.json`, including per-team per-round opponent probability data
+used by the flow diagram. Run this once, or whenever you want fresh numbers.
 
 ```bash
 venv/bin/python run_simulations.py
@@ -80,18 +81,24 @@ venv/bin/python run_simulations.py
 
 ### `generate_results.py` — static results webpage
 
-Reads `sim_results.json` and writes a self-contained `index.html` with the
-win-probability table embedded as inline JSON (no server required). Fast —
-no simulation is performed; re-run any time to rebuild the page.
+Reads `sim_results.json` and writes a self-contained `index.html`. No server
+required — open directly in a browser.
 
 ```bash
 venv/bin/python generate_results.py
 open index.html          # or double-click in Finder / Explorer
 ```
 
-The page shows all 48 teams ranked by win probability with sortable columns
-(Win %, Finalist %, Top 3 %) and a filter box. Placeholder teams (unresolved
-playoff slots) are shown in gray italic.
+The page has two views:
+
+**Probability table** — all 48 teams ranked by win probability with sortable
+columns (Win %, Finalist %, Top 3 %) and a filter box.
+
+**Team flow diagram** — click any team name to see a stage-by-stage flow
+diagram of their tournament path. Group opponents are shown at 100%; each
+knockout round shows all possible opponents with bezier curve thickness
+proportional to the probability of facing them. Click any opponent in the
+diagram to switch to that team's view.
 
 ## Data files (`data/`)
 
