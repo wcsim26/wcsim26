@@ -1,11 +1,13 @@
 """
 generate_results.py
 -------------------
-Runs 1 000 Monte Carlo tournament simulations and writes a self-contained
-index.html with the win-probability table embedded as inline JSON.
+Reads sim_results.json (produced by run_simulations.py) and writes a
+self-contained index.html with the win-probability table embedded as
+inline JSON. Fast — no simulation is performed here.
 
 Usage:
-    venv/bin/python generate_results.py
+    venv/bin/python run_simulations.py   # run once to generate sim_results.json
+    venv/bin/python generate_results.py  # rebuild index.html any time
     open index.html
 """
 
@@ -13,10 +15,9 @@ import json
 import sys
 from pathlib import Path
 
-from tournament_simulator import load_tournament_data, simulate_tournament
+from tournament_simulator import load_tournament_data
 
-N = 1000
-SEED = 0
+SIM_FILE = Path(__file__).parent / "sim_results.json"
 OUT = Path(__file__).parent / "index.html"
 
 
@@ -400,22 +401,31 @@ const DATA = __JSON_PLACEHOLDER__;
 
 
 def main():
-    print(f"Running {N} simulations (seed={SEED})…", flush=True)
-    results = simulate_tournament(n=N, seed=SEED)
+    if not SIM_FILE.exists():
+        sys.exit(
+            f"Error: {SIM_FILE} not found.\n"
+            "Run `venv/bin/python run_simulations.py` first."
+        )
+
+    sim_data = json.loads(SIM_FILE.read_text(encoding="utf-8"))
+    n = sim_data["n_simulations"]
+
+    import pandas as pd
+    results = pd.DataFrame(sim_data["runs"])
 
     data = load_tournament_data()
     teams_df = data["teams"]
 
-    rows = compute_team_stats(results, teams_df, N)
+    rows = compute_team_stats(results, teams_df, n)
 
     payload = json.dumps(
-        {"n_simulations": N, "seed": SEED, "teams": rows},
+        {"n_simulations": n, "seed": sim_data["seed"], "teams": rows},
         indent=2,
     )
 
     html = HTML_TEMPLATE.replace("__JSON_PLACEHOLDER__", payload)
     OUT.write_text(html, encoding="utf-8")
-    print(f"Wrote {OUT} ({len(rows)} teams, {N} simulations)")
+    print(f"Wrote {OUT} ({len(rows)} teams, {n} simulations)")
 
 
 if __name__ == "__main__":

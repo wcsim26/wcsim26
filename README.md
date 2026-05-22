@@ -69,10 +69,20 @@ Run the built-in demo (single bracket + 10-sim probability table):
 venv/bin/python tournament_simulator.py
 ```
 
+### `run_simulations.py` — run and save simulation results
+
+Runs 1 000 Monte Carlo simulations and saves raw per-run results to
+`sim_results.json`. Run this once, or whenever you want fresh numbers.
+
+```bash
+venv/bin/python run_simulations.py
+```
+
 ### `generate_results.py` — static results webpage
 
-Runs 1 000 Monte Carlo simulations and writes a self-contained `index.html`
-with the win-probability table embedded as inline JSON (no server required).
+Reads `sim_results.json` and writes a self-contained `index.html` with the
+win-probability table embedded as inline JSON (no server required). Fast —
+no simulation is performed; re-run any time to rebuild the page.
 
 ```bash
 venv/bin/python generate_results.py
