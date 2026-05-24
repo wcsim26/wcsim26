@@ -13,6 +13,7 @@ Usage:
 
 import json
 import sys
+from math import log2
 from pathlib import Path
 
 from tournament_simulator import build_elo_map, load_tournament_data
@@ -338,6 +339,69 @@ HTML_TEMPLATE = """\
     header h1 { font-size: 1.4rem; }
     .bar-cell { min-width: 90px; }
   }
+
+  /* ── Navigation ── */
+  nav {
+    background: #161b22;
+    border-bottom: 1px solid #21262d;
+    display: flex;
+    justify-content: center;
+  }
+  nav a {
+    display: inline-block;
+    padding: 0.6rem 1.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #8b949e;
+    text-decoration: none;
+    border-bottom: 2px solid transparent;
+  }
+  nav a:hover { color: #e6edf3; }
+  nav a.active { color: #2ea043; border-bottom-color: #2ea043; }
+
+  /* ── Games view ── */
+  #games-view main {
+    max-width: 1020px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+  }
+  .entropy-banner {
+    background: #161b22;
+    border: 1px solid #21262d;
+    border-radius: 8px;
+    padding: 0.85rem 1.25rem;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+    color: #8b949e;
+  }
+  .entropy-banner strong { color: #2ea043; font-size: 1.05rem; }
+  .stage-filters { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .stage-btn {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #8b949e;
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 0.3rem 0.7rem;
+    font-family: system-ui, sans-serif;
+  }
+  .stage-btn:hover { color: #e6edf3; border-color: #8b949e; }
+  .stage-btn.active { background: #2ea043; color: #fff; border-color: #2ea043; }
+  .imp-cell { min-width: 130px; }
+  .imp-wrap { display: flex; align-items: center; gap: 0.5rem; }
+  .imp-track {
+    flex: 1; height: 6px; background: #21262d; border-radius: 3px; min-width: 50px;
+  }
+  .imp-fill { height: 100%; background: #2ea043; border-radius: 3px; }
+  .imp-pct { font-size: 0.8rem; color: #e6edf3; white-space: nowrap; min-width: 42px; text-align: right; }
+  .wdl-mini { display: flex; gap: 1px; height: 6px; border-radius: 2px; overflow: hidden; width: 80px; }
+  .wdl-mini-w { background: #2ea043; }
+  .wdl-mini-d { background: #8b949e; }
+  .wdl-mini-l { background: #f85149; }
+  .ko-teams { font-size: 0.8rem; color: #8b949e; }
+  .ko-teams span { color: #e6edf3; font-weight: 500; }
+  .match-lbl { color: #484f58; font-size: 0.75rem; }
 </style>
 </head>
 <body>
@@ -350,6 +414,11 @@ HTML_TEMPLATE = """\
     seed = <span id="seed-val"></span>
   </p>
 </header>
+
+<nav>
+  <a href="#" id="nav-teams">Teams</a>
+  <a href="#games" id="nav-games">All Matches</a>
+</nav>
 
 <!-- ═══ Main view: probability table ═══ -->
 <div id="main-view">
@@ -407,6 +476,39 @@ HTML_TEMPLATE = """\
   </div>
 </div>
 
+<!-- ═══ Games view: all matches ═══ -->
+<div id="games-view" style="display:none">
+  <main>
+    <div class="entropy-banner">
+      Tournament winner entropy: <strong id="entropy-val"></strong> bits
+      &nbsp;&mdash;&nbsp; <span id="entropy-pct"></span>% of the <span id="entropy-max"></span>-bit uniform maximum
+    </div>
+    <div class="stage-filters" id="stage-filters">
+      <button class="stage-btn active" data-stage="all">All</button>
+      <button class="stage-btn" data-stage="1">Group Stage</button>
+      <button class="stage-btn" data-stage="2">Round of 32</button>
+      <button class="stage-btn" data-stage="3">Round of 16</button>
+      <button class="stage-btn" data-stage="4">Quarters</button>
+      <button class="stage-btn" data-stage="5">Semis</button>
+      <button class="stage-btn" data-stage="7">Final</button>
+    </div>
+    <div class="table-wrap">
+      <table id="games-table">
+        <thead>
+          <tr>
+            <th class="imp-cell" data-gcol="importance">Importance</th>
+            <th data-gcol="stage_name">Stage</th>
+            <th class="num" data-gcol="match_number">#</th>
+            <th data-gcol="teams">Teams</th>
+            <th data-gcol="outcome">Outcome %</th>
+          </tr>
+        </thead>
+        <tbody id="games-body"></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
 <footer>
   Model constants: &alpha; = <code>0.26</code> (ln 1.3), &beta; = <code>0.003</code>,
   home advantage <code>+100 Elo</code> for USA / Mexico / Canada in their own venues.
@@ -417,6 +519,8 @@ HTML_TEMPLATE = """\
 <script>
 const DATA  = __DATA_PLACEHOLDER__;
 const FLOWS = __FLOWS_PLACEHOLDER__;
+const GAMES = __GAMES_PLACEHOLDER__;
+const META  = __META_PLACEHOLDER__;
 
 (function () {
   // ── Shared state ──────────────────────────────────────────────────────────
@@ -430,9 +534,17 @@ const FLOWS = __FLOWS_PLACEHOLDER__;
   teams.forEach(t => { teamByCode[t.code] = t; });
 
   // ── Routing ───────────────────────────────────────────────────────────────
+  function setNavActive(id) {
+    document.querySelectorAll("nav a").forEach(a => a.classList.remove("active"));
+    const el = document.getElementById(id);
+    if (el) el.classList.add("active");
+  }
+
   function route() {
     const hash = window.location.hash.replace("#", "");
-    if (hash && teamByCode[hash]) {
+    if (hash === "games") {
+      showGames();
+    } else if (hash && teamByCode[hash]) {
       showTeam(hash);
     } else {
       showMain();
@@ -442,6 +554,8 @@ const FLOWS = __FLOWS_PLACEHOLDER__;
   function showMain() {
     document.getElementById("main-view").style.display = "";
     document.getElementById("team-view").style.display = "none";
+    document.getElementById("games-view").style.display = "none";
+    setNavActive("nav-teams");
     document.title = "2026 FIFA World Cup Simulator";
     refresh();
   }
@@ -450,6 +564,8 @@ const FLOWS = __FLOWS_PLACEHOLDER__;
     const team = teamByCode[code];
     document.getElementById("main-view").style.display = "none";
     document.getElementById("team-view").style.display = "";
+    document.getElementById("games-view").style.display = "none";
+    setNavActive(null);
 
     document.getElementById("team-title").textContent = team.name;
     document.getElementById("team-group-badge").textContent = "Group " + team.group;
@@ -460,6 +576,19 @@ const FLOWS = __FLOWS_PLACEHOLDER__;
 
     renderFlowDiagram(document.getElementById("flow-svg"), code, FLOWS[code] || {});
     document.title = team.name + " – WC2026 Simulator";
+    window.scrollTo(0, 0);
+  }
+
+  function showGames() {
+    document.getElementById("main-view").style.display = "none";
+    document.getElementById("team-view").style.display = "none";
+    document.getElementById("games-view").style.display = "";
+    setNavActive("nav-games");
+    document.getElementById("entropy-val").textContent = META.H_bits.toFixed(3);
+    document.getElementById("entropy-pct").textContent = (META.H_bits / META.max_bits * 100).toFixed(1);
+    document.getElementById("entropy-max").textContent = META.max_bits.toFixed(3);
+    document.title = "All Matches – WC2026 Simulator";
+    renderGamesTable();
     window.scrollTo(0, 0);
   }
 
@@ -551,6 +680,113 @@ const FLOWS = __FLOWS_PLACEHOLDER__;
   });
 
   document.getElementById("search").addEventListener("input", refresh);
+
+  // ── Games table ──────────────────────────────────────────────────────────
+  let gSortCol = "importance";
+  let gSortAsc = false;
+  let gStageFilter = "all";
+
+  const maxImp = Math.max(...GAMES.map(g => g.importance));
+
+  function renderGamesTable() {
+    let rows = GAMES.slice();
+    if (gStageFilter !== "all") {
+      rows = rows.filter(g => String(g.stage_id) === gStageFilter);
+    }
+    rows.sort((a, b) => {
+      let av = a[gSortCol], bv = b[gSortCol];
+      if (gSortCol === "teams") {
+        av = a.home_name || a.match_label || "";
+        bv = b.home_name || b.match_label || "";
+        return gSortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+      }
+      if (gSortCol === "stage_name") {
+        av = a.stage_id; bv = b.stage_id;
+      }
+      return gSortAsc ? av - bv : bv - av;
+    });
+
+    const tbody = document.getElementById("games-body");
+    tbody.innerHTML = "";
+    rows.forEach(g => {
+      const isGroup = g.stage_id === 1;
+      const impPct = maxImp > 0 ? g.importance / maxImp * 100 : 0;
+
+      // Teams cell
+      let teamsHtml;
+      if (isGroup) {
+        teamsHtml = `<a class="team-link" href="#${g.home_code}">${g.home_name}</a>`
+          + ` <span style="color:#484f58">vs</span> `
+          + `<a class="team-link" href="#${g.away_code}">${g.away_name}</a>`
+          + `<br><span class="match-lbl">Match ${g.match_number}</span>`;
+      } else {
+        const topTeams = (g.top_teams || []).slice(0, 3)
+          .map(t => `<a class="team-link" href="#${t.code}">${t.code}</a> <span style="color:#8b949e">${(t.win_prob*100).toFixed(0)}%</span>`)
+          .join("  ");
+        teamsHtml = `<span class="match-lbl">${g.match_label} &mdash; Match ${g.match_number}</span><br><span class="ko-teams">${topTeams}</span>`;
+      }
+
+      // Outcome cell
+      let outcomeHtml;
+      if (isGroup) {
+        const w = (g.win_prob * 100).toFixed(1);
+        const d = (g.draw_prob * 100).toFixed(1);
+        const l = (g.loss_prob * 100).toFixed(1);
+        outcomeHtml = `<div style="display:flex;align-items:center;gap:6px">
+          <div class="wdl-mini">
+            <div class="wdl-mini-w" style="flex:${g.win_prob}"></div>
+            <div class="wdl-mini-d" style="flex:${g.draw_prob}"></div>
+            <div class="wdl-mini-l" style="flex:${g.loss_prob}"></div>
+          </div>
+          <span style="font-size:0.78rem;color:#8b949e">${w}W ${d}D ${l}L</span>
+        </div>`;
+      } else {
+        outcomeHtml = `<span style="color:#484f58;font-size:0.8rem">—</span>`;
+      }
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td class="imp-cell">
+          <div class="imp-wrap">
+            <div class="imp-track"><div class="imp-fill" style="width:${impPct.toFixed(1)}%"></div></div>
+            <span class="imp-pct">${g.importance.toFixed(1)}%</span>
+          </div>
+        </td>
+        <td style="font-size:0.82rem;white-space:nowrap">${g.stage_name}</td>
+        <td class="num" style="font-size:0.8rem;color:#8b949e">${g.match_number}</td>
+        <td style="font-size:0.82rem">${teamsHtml}</td>
+        <td>${outcomeHtml}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    // Update sort indicators
+    document.querySelectorAll("th[data-gcol]").forEach(th => {
+      th.classList.remove("sort-asc", "sort-desc");
+      if (th.dataset.gcol === gSortCol) th.classList.add(gSortAsc ? "sort-asc" : "sort-desc");
+    });
+  }
+
+  document.querySelectorAll("th[data-gcol]").forEach(th => {
+    th.addEventListener("click", () => {
+      if (gSortCol === th.dataset.gcol) {
+        gSortAsc = !gSortAsc;
+      } else {
+        gSortCol = th.dataset.gcol;
+        gSortAsc = gSortCol === "stage_name" || gSortCol === "teams" || gSortCol === "match_number";
+      }
+      renderGamesTable();
+    });
+  });
+
+  document.querySelectorAll(".stage-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      gStageFilter = btn.dataset.stage;
+      document.querySelectorAll(".stage-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      renderGamesTable();
+    });
+  });
 
   // ── SVG flow diagram ──────────────────────────────────────────────────────
   function renderFlowDiagram(svgEl, code, flows) {
@@ -760,12 +996,19 @@ def main():
     enrich_flows_with_wdl(team_flows, teams_df, data["elo"])
     rows = compute_team_stats(results, teams_df, n)
 
+    H_bits = sim_data.get("H_bits", 0)
+    games  = sim_data.get("games", [])
+
     data_json  = json.dumps({"n_simulations": n, "seed": sim_data["seed"], "teams": rows})
     flows_json = json.dumps(team_flows)
+    games_json = json.dumps(games)
+    meta_json  = json.dumps({"H_bits": H_bits, "max_bits": round(log2(48), 4)})
 
     html = HTML_TEMPLATE \
         .replace("__DATA_PLACEHOLDER__",  data_json) \
-        .replace("__FLOWS_PLACEHOLDER__", flows_json)
+        .replace("__FLOWS_PLACEHOLDER__", flows_json) \
+        .replace("__GAMES_PLACEHOLDER__", games_json) \
+        .replace("__META_PLACEHOLDER__",  meta_json)
 
     OUT.write_text(html, encoding="utf-8")
     print(f"Wrote {OUT} ({len(rows)} teams, {n} simulations, {len(team_flows)} flow maps)")

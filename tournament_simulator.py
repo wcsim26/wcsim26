@@ -439,9 +439,9 @@ def simulate_tournament(
 
     Returns
     -------
-    DataFrame (detailed=False) or (DataFrame, matchups_list) (detailed=True).
-    DataFrame columns: sim_id, champion_code, champion_name, finalist_code,
-    third_place_code.
+    DataFrame (detailed=False) or (DataFrame, matchups_list, group_results_list)
+    (detailed=True). DataFrame columns: sim_id, champion_code, champion_name,
+    finalist_code, third_place_code.
     """
     data = load_tournament_data()
     teams_df   = data["teams"]
@@ -462,6 +462,7 @@ def simulate_tournament(
     rng = np.random.default_rng(seed)
     records: list = []
     all_matchups: list = []
+    all_group_results: list = []
 
     for sim_id in range(n):
         group_results    = simulate_group_stage(matches_df, elo_map, host_map, nation_map, rng)
@@ -487,18 +488,30 @@ def simulate_tournament(
         if detailed:
             matchups = [
                 {
-                    "stage_id":   int(stage_lookup[mn]),
-                    "team_a_id":  int(winners[mn]),
-                    "team_b_id":  int(losers[mn]),
+                    "stage_id":    int(stage_lookup[mn]),
+                    "match_number": mn,
+                    "team_a_id":   int(winners[mn]),
+                    "team_b_id":   int(losers[mn]),
                 }
                 for mn in winners
                 if stage_lookup.get(mn) in (2, 3, 4, 5, 7)
             ]
             all_matchups.append(matchups)
 
+            gs_outcomes = []
+            for _, row in group_results.iterrows():
+                if row.home_goals > row.away_goals:
+                    result = "H"
+                elif row.away_goals > row.home_goals:
+                    result = "A"
+                else:
+                    result = "D"
+                gs_outcomes.append({"match_number": int(row.match_number), "result": result})
+            all_group_results.append(gs_outcomes)
+
     df = pd.DataFrame(records)
     if detailed:
-        return df, all_matchups
+        return df, all_matchups, all_group_results
     return df
 
 # ---------------------------------------------------------------------------
