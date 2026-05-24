@@ -435,6 +435,10 @@ HTML_TEMPLATE = """\
             <th class="num" data-col="rank">Rank</th>
             <th data-col="name">Team</th>
             <th data-col="group">Grp</th>
+            <th class="num" data-col="r32_pct">R32 %</th>
+            <th class="num" data-col="r16_pct">R16 %</th>
+            <th class="num" data-col="qf_pct">QF %</th>
+            <th class="num" data-col="sf_pct">SF %</th>
             <th class="num bar-cell" data-col="win_pct">Win %</th>
             <th class="num" data-col="finalist_pct">Final %</th>
             <th class="num" data-col="top3_pct">Top 3 %</th>
@@ -533,6 +537,16 @@ const META  = __META_PLACEHOLDER__;
   const teamByCode = {};
   teams.forEach(t => { teamByCode[t.code] = t; });
 
+  function reachPct(code, stage) {
+    return ((FLOWS[code] || {})[stage] || []).reduce((s, o) => s + o.prob, 0) * 100;
+  }
+  teams.forEach(t => {
+    t.r32_pct = reachPct(t.code, "r32");
+    t.r16_pct = reachPct(t.code, "r16");
+    t.qf_pct  = reachPct(t.code, "qf");
+    t.sf_pct  = reachPct(t.code, "sf");
+  });
+
   // ── Routing ───────────────────────────────────────────────────────────────
   function setNavActive(id) {
     document.querySelectorAll("nav a").forEach(a => a.classList.remove("active"));
@@ -616,6 +630,10 @@ const META  = __META_PLACEHOLDER__;
           </a>
         </td>
         <td><span class="group-badge">${t.group}</span></td>
+        <td class="num pct ${t.r32_pct > 0 ? "nonzero" : ""}">${t.r32_pct.toFixed(1)}</td>
+        <td class="num pct ${t.r16_pct > 0 ? "nonzero" : ""}">${t.r16_pct.toFixed(1)}</td>
+        <td class="num pct ${t.qf_pct  > 0 ? "nonzero" : ""}">${t.qf_pct.toFixed(1)}</td>
+        <td class="num pct ${t.sf_pct  > 0 ? "nonzero" : ""}">${t.sf_pct.toFixed(1)}</td>
         <td class="num bar-cell">
           <div class="bar-wrap">
             <div class="bar-track"><div class="bar-fill" style="width:${barWidth}%"></div></div>
@@ -645,6 +663,10 @@ const META  = __META_PLACEHOLDER__;
       }
       if (sortCol === "name")          { av = a.name;          bv = b.name; }
       if (sortCol === "group")         { av = a.group;         bv = b.group; }
+      if (sortCol === "r32_pct")       { av = a.r32_pct;       bv = b.r32_pct; }
+      if (sortCol === "r16_pct")       { av = a.r16_pct;       bv = b.r16_pct; }
+      if (sortCol === "qf_pct")        { av = a.qf_pct;        bv = b.qf_pct; }
+      if (sortCol === "sf_pct")        { av = a.sf_pct;        bv = b.sf_pct; }
       if (sortCol === "win_pct")       { av = a.win_pct;       bv = b.win_pct; }
       if (sortCol === "finalist_pct")  { av = a.finalist_pct;  bv = b.finalist_pct; }
       if (sortCol === "top3_pct")      { av = a.top3_pct;      bv = b.top3_pct; }
@@ -799,8 +821,8 @@ const META  = __META_PLACEHOLDER__;
     const GROUP_H     = 54;
     const PX_PER_PCT  = 4.2;
     const MIN_KO_H    = 36;
-    const HEADER_H    = 22;
-    const PAD_TOP     = HEADER_H + 14;
+    const HEADER_H    = 34;
+    const PAD_TOP     = HEADER_H + 10;
     const PAD_BOT     = 16;
     const TEAM_W      = 64;
     const TEAM_GAP    = 48;
@@ -868,14 +890,23 @@ const META  = __META_PLACEHOLDER__;
       fill: "#fff", "font-family": "system-ui,sans-serif",
     }, code));
 
-    // Stage headers
-    cols.forEach(col => {
+    // Stage headers with reach probability
+    cols.forEach((col, i) => {
       svgEl.appendChild(txt("text", {
-        x: col.x + BOX_W / 2, y: HEADER_H,
+        x: col.x + BOX_W / 2, y: 14,
         "text-anchor": "middle",
         "font-size": "10", "font-weight": "600", "letter-spacing": "0.04em",
         fill: "#8b949e", "font-family": "system-ui,sans-serif",
       }, col.label.toUpperCase()));
+      const stage = STAGES[i];
+      const rp = stage === "group" ? 100
+        : (flows[stage] || []).reduce((s, o) => s + o.prob, 0) * 100;
+      svgEl.appendChild(txt("text", {
+        x: col.x + BOX_W / 2, y: 27,
+        "text-anchor": "middle",
+        "font-size": "10", fill: "#2ea043",
+        "font-family": "system-ui,sans-serif",
+      }, rp.toFixed(1) + "%"));
     });
 
     // Draw bezier curves (rendered before boxes so boxes sit on top)
