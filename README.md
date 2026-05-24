@@ -92,10 +92,13 @@ open index.html          # or double-click in Finder / Explorer
 The page has three views, accessible from the navigation bar:
 
 **Probability table** — all 48 teams ranked by win probability with sortable
-columns (Win %, Finalist %, Top 3 %) and a filter box.
+columns (R32 %, R16 %, QF %, SF %, Win %, Finalist %, Top 3 %) and a filter
+box. The four stage columns show the probability of reaching each knockout
+round, forming a full funnel view from group exit through champion.
 
 **Team flow diagram** — click any team name to see a stage-by-stage flow
-diagram of their tournament path. Group opponents are shown at 100%; each
+diagram of their tournament path. Each stage column header shows the team's
+probability of reaching that stage. Group opponents are shown at 100%; each
 knockout round shows all possible opponents with bezier curve thickness
 proportional to the probability of facing them. Each opponent box includes a
 small segmented bar showing head-to-head probabilities computed analytically
