@@ -15,10 +15,25 @@ import json
 import sys
 from pathlib import Path
 
-from tournament_simulator import load_tournament_data
+from tournament_simulator import build_elo_map, load_tournament_data
+from wc26_simulation import calculate_expected_goals, get_match_probabilities
 
 SIM_FILE = Path(__file__).parent / "sim_results.json"
 OUT = Path(__file__).parent / "index.html"
+
+
+def enrich_flows_with_wdl(team_flows, teams_df, elo_df):
+    elo_map = build_elo_map(teams_df, elo_df)
+    code_to_elo = {row["fifa_code"]: elo_map[int(row["id"])] for _, row in teams_df.iterrows()}
+    fallback = 1650.0
+    for focal_code, stages in team_flows.items():
+        focal_elo = code_to_elo.get(focal_code, fallback)
+        for opps in stages.values():
+            for opp in opps:
+                opp_elo = code_to_elo.get(opp["code"], fallback)
+                lam_a, lam_b = calculate_expected_goals(focal_elo, opp_elo)
+                probs = get_match_probabilities(lam_a, lam_b)
+                opp["wdl"] = [round(probs["win_a"], 4), round(probs["draw"], 4), round(probs["win_b"], 4)]
 
 
 def compute_team_stats(results, teams_df, n):
@@ -541,9 +556,9 @@ const FLOWS = __FLOWS_PLACEHOLDER__;
     const COL_GAP     = 68;
     const STEP        = BOX_W + COL_GAP;
     const BOX_GAP     = 5;
-    const GROUP_H     = 44;
+    const GROUP_H     = 54;
     const PX_PER_PCT  = 4.2;
-    const MIN_KO_H    = 26;
+    const MIN_KO_H    = 36;
     const HEADER_H    = 22;
     const PAD_TOP     = HEADER_H + 14;
     const PAD_BOT     = 16;
@@ -559,7 +574,7 @@ const FLOWS = __FLOWS_PLACEHOLDER__;
         const h = stage === "group"
           ? GROUP_H
           : Math.max(MIN_KO_H, opp.prob * 100 * PX_PER_PCT);
-        const box = { code: opp.code, name: opp.name, prob: opp.prob, y, h };
+        const box = { code: opp.code, name: opp.name, prob: opp.prob, wdl: opp.wdl || null, y, h };
         y += h + BOX_GAP;
         return box;
       });
@@ -673,25 +688,38 @@ const FLOWS = __FLOWS_PLACEHOLDER__;
           ? box.name.slice(0, maxChars - 1) + "…"
           : box.name;
 
+        // Text zone excludes bottom bar area (~12px)
+        const textCY = box.y + (box.h - 12) / 2;
         if (box.h >= 34) {
-          // Two-line label
           g.appendChild(txt("text", {
-            x: col.x + 6, y: box.y + box.h / 2 - 5,
+            x: col.x + 6, y: textCY - 5,
             "font-size": "11", fill: "#e6edf3",
             "font-family": "system-ui,sans-serif",
           }, name));
           g.appendChild(txt("text", {
-            x: col.x + 6, y: box.y + box.h / 2 + 9,
+            x: col.x + 6, y: textCY + 9,
             "font-size": "10", fill: "#2ea043",
             "font-family": "system-ui,sans-serif",
           }, pct));
         } else {
           g.appendChild(txt("text", {
-            x: col.x + 5, y: box.y + box.h / 2,
+            x: col.x + 5, y: textCY,
             "dominant-baseline": "middle",
             "font-size": "10", fill: "#e6edf3",
             "font-family": "system-ui,sans-serif",
           }, name + " " + pct));
+        }
+
+        if (box.wdl) {
+          const [win, draw, loss] = box.wdl;
+          const BAR_H = 5, barPadX = 5, barPadBot = 4;
+          const bx = col.x + barPadX;
+          const by = box.y + box.h - BAR_H - barPadBot;
+          const bw = BOX_W - barPadX * 2;
+          const ww = bw * win, dw = bw * draw, lw = bw * loss;
+          if (ww > 0) g.appendChild(mk("rect", { x: bx,           y: by, width: ww, height: BAR_H, rx: 2, fill: "#2ea043" }));
+          if (dw > 0) g.appendChild(mk("rect", { x: bx + ww,      y: by, width: dw, height: BAR_H,        fill: "#8b949e" }));
+          if (lw > 0) g.appendChild(mk("rect", { x: bx + ww + dw, y: by, width: lw, height: BAR_H, rx: 2, fill: "#f85149" }));
         }
 
         svgEl.appendChild(g);
@@ -725,6 +753,7 @@ def main():
     data = load_tournament_data()
     teams_df = data["teams"]
 
+    enrich_flows_with_wdl(team_flows, teams_df, data["elo"])
     rows = compute_team_stats(results, teams_df, n)
 
     data_json  = json.dumps({"n_simulations": n, "seed": sim_data["seed"], "teams": rows})
