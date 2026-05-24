@@ -89,7 +89,7 @@ venv/bin/python generate_results.py
 open index.html          # or double-click in Finder / Explorer
 ```
 
-The page has two views:
+The page has three views, accessible from the navigation bar:
 
 **Probability table** — all 48 teams ranked by win probability with sortable
 columns (Win %, Finalist %, Top 3 %) and a filter box.
@@ -97,12 +97,22 @@ columns (Win %, Finalist %, Top 3 %) and a filter box.
 **Team flow diagram** — click any team name to see a stage-by-stage flow
 diagram of their tournament path. Group opponents are shown at 100%; each
 knockout round shows all possible opponents with bezier curve thickness
-proportional to the probability of facing them. Each opponent box includes a small segmented bar showing head-to-head
-probabilities computed analytically from Elo ratings (neutral ground): group
-stage boxes show win (green) / draw (gray) / loss (red); knockout boxes show
-only win / loss with the draw probability folded 50/50 into each side
-(reflecting the penalty shootout tiebreaker). Click any opponent in the
-diagram to switch to that team's view.
+proportional to the probability of facing them. Each opponent box includes a
+small segmented bar showing head-to-head probabilities computed analytically
+from Elo ratings (neutral ground): group stage boxes show win (green) / draw
+(gray) / loss (red); knockout boxes show only win / loss with the draw
+probability folded 50/50 into each side (reflecting the penalty shootout
+tiebreaker). Click any opponent in the diagram to switch to that team's view.
+
+**All Matches** — all 104 games in a sortable, filterable table. Each game
+has an **importance score**: the percentage reduction in Shannon entropy of the
+tournament-winner distribution that results from knowing that game's outcome.
+The Final is always 100% important (it directly determines the champion);
+early group stage games are typically under 1%. The page header shows the
+total tournament winner entropy in bits (e.g. 3.42 bits out of a 5.58-bit
+uniform maximum over 48 teams). Group stage rows display analytic W/D/L
+probabilities; knockout rows display the bracket slot label and the top
+simulated contenders with their slot-win probabilities.
 
 ## Data files (`data/`)
 
