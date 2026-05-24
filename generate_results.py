@@ -28,12 +28,16 @@ def enrich_flows_with_wdl(team_flows, teams_df, elo_df):
     fallback = 1650.0
     for focal_code, stages in team_flows.items():
         focal_elo = code_to_elo.get(focal_code, fallback)
-        for opps in stages.values():
+        for stage, opps in stages.items():
             for opp in opps:
                 opp_elo = code_to_elo.get(opp["code"], fallback)
                 lam_a, lam_b = calculate_expected_goals(focal_elo, opp_elo)
                 probs = get_match_probabilities(lam_a, lam_b)
-                opp["wdl"] = [round(probs["win_a"], 4), round(probs["draw"], 4), round(probs["win_b"], 4)]
+                if stage == "group":
+                    opp["wdl"] = [round(probs["win_a"], 4), round(probs["draw"], 4), round(probs["win_b"], 4)]
+                else:
+                    half_draw = probs["draw"] / 2
+                    opp["wdl"] = [round(probs["win_a"] + half_draw, 4), 0, round(probs["win_b"] + half_draw, 4)]
 
 
 def compute_team_stats(results, teams_df, n):

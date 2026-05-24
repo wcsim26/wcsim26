@@ -97,11 +97,12 @@ columns (Win %, Finalist %, Top 3 %) and a filter box.
 **Team flow diagram** — click any team name to see a stage-by-stage flow
 diagram of their tournament path. Group opponents are shown at 100%; each
 knockout round shows all possible opponents with bezier curve thickness
-proportional to the probability of facing them. Each opponent box includes a
-small segmented bar showing win (green) / draw (gray) / loss (red)
-probabilities for that head-to-head matchup, computed analytically from Elo
-ratings (neutral ground). Click any opponent in the diagram to switch to that
-team's view.
+proportional to the probability of facing them. Each opponent box includes a small segmented bar showing head-to-head
+probabilities computed analytically from Elo ratings (neutral ground): group
+stage boxes show win (green) / draw (gray) / loss (red); knockout boxes show
+only win / loss with the draw probability folded 50/50 into each side
+(reflecting the penalty shootout tiebreaker). Click any opponent in the
+diagram to switch to that team's view.
 
 ## Data files (`data/`)
 
